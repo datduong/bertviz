@@ -1,6 +1,30 @@
 import torch
 from collections import defaultdict
 
+
+
+def make_token (string_input,tokenizer,tokens,segment_ids,segment_type,cls_token=None,truncate=False): 
+  if string_input == '[MASK]': 
+    this_token = ['[MASK]'] ### mask token in bert-cased-base is position 103, so double check this. 
+  else: 
+    this_token = tokenizer.tokenize(string_input)
+
+  if truncate: 
+    if len(this_token) > 200: ## save space for self description
+      this_token = this_token[0:200]
+
+  this_token = this_token + ['[SEP]'] ## add sep at end to indicate ends. will add cls later
+  tokens = tokens + this_token 
+  segment_ids = segment_ids + [segment_type] * len(this_token) ## always need segment ids 
+  
+  if cls_token is not None: 
+    tokens = ['[CLS]'] + tokens
+    segment_ids = [segment_type] + segment_ids 
+
+  return tokens, segment_ids
+
+
+
 def get_attention(model, tokenizer, text, include_queries_and_keys=False):
 
     """Compute representation of the attention to pass to the d3 visualization
@@ -87,11 +111,28 @@ def get_attention_bert(model, tokenizer, sentence_a, sentence_b, include_queries
     """
 
     # Prepare inputs to model
-    tokens_a = ['[CLS]'] + tokenizer.tokenize(sentence_a)  + ['[SEP]']
-    tokens_b = tokenizer.tokenize(sentence_b) + ['[SEP]']
-    token_ids = tokenizer.convert_tokens_to_ids(tokens_a + tokens_b)
+    # tokens_a = ['[CLS]'] + tokenizer.tokenize(sentence_a)  + ['[SEP]']
+    # tokens_b = tokenizer.tokenize(sentence_b) + ['[SEP]']
+    # token_ids = tokenizer.convert_tokens_to_ids(tokens_a + tokens_b)
+    # tokens_tensor = torch.tensor([token_ids])
+    # token_type_tensor = torch.LongTensor([[0] * len(tokens_a) + [1] * len(tokens_b)])
+
+    ## replace by using util_glue.py
+    sent_a = sentence_a.split('[SEP]') 
+    sent_a = [tokenizer.tokenize(a) for a in sent_a] ## tokenize each segment 
+    sent_a[0] = '[CLS]' + sent_a[0] ## ADD CLS TO FIRST SEGMENT 
+    token_ids = []
+    for t in sent_a: 
+      token_ids = token_ids + t + '[SEP]' ## add each token id WITH SEP
+    
+    token_type = [ counter*len(s) for counter,s in enumerate(sent_a) ]
+    token_type_ids = []
+    for t in token_type: 
+      token_type_ids = token_type_ids + t
+
     tokens_tensor = torch.tensor([token_ids])
-    token_type_tensor = torch.LongTensor([[0] * len(tokens_a) + [1] * len(tokens_b)])
+    token_type_tensor = torch.LongTensor(token_type_ids) 
+    
 
     # Call model to get attention data
     model.eval()
