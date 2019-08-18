@@ -56,18 +56,19 @@ def get_attention(model, tokenizer, text, include_queries_and_keys=False):
     })
   return {'all': results}
 
-def format_sentence_a (sentence_a,tokenizer): 
+def format_sentence_a (sentence_a,tokenizer,shift_counter=0,add_cls=True): 
 
   sent_a = sentence_a.split('[SEP]')
   sent_a = [tokenizer.tokenize(a.strip()) for a in sent_a] ## tokenize each segment
-  sent_a[0] = ['[CLS]'] + sent_a[0] ## ADD CLS TO FIRST SEGMENT
+  if add_cls:
+    sent_a[0] = ['[CLS]'] + sent_a[0] ## ADD CLS TO FIRST SEGMENT
 
   token_type_ids = []
   tokens_a = []
   for counter,t in enumerate(sent_a):
     if len(t) > 0: ## trailing blank ?? 
       tokens_a = tokens_a + t + ['[SEP]'] ## add each token id WITH SEP
-      token_type_ids = token_type_ids + len(t + ['[SEP]']) * [counter] 
+      token_type_ids = token_type_ids + len(t + ['[SEP]']) * [counter+shift_counter] ## @shift_counter is needed if we have 2nd sentence with many [sep] as well
 
   token_ids = tokenizer.convert_tokens_to_ids (tokens_a)
 
@@ -122,11 +123,13 @@ def get_attention_bert(model, tokenizer, sentence_a, sentence_b, include_queries
   # token_type_tensor = torch.LongTensor([[0] * len(tokens_a) + [1] * len(tokens_b)])
 
   tokens_a, token_ids_a, token_type_ids_a = format_sentence_a (sentence_a,tokenizer)
-  tokens_b, token_ids_b, token_type_ids_b = format_sentence_b (sentence_b,tokenizer)
+  tokens_b, token_ids_b, token_type_ids_b = format_sentence_a (sentence_b,tokenizer,shift_counter=4,add_cls=False)
+  # tokens_b, token_ids_b, token_type_ids_b = format_sentence_b (sentence_b,tokenizer)
   
   tokens_tensor = torch.tensor( [token_ids_a + token_ids_b] )
   token_type_tensor = torch.LongTensor( [token_type_ids_a + token_type_ids_b] )
 
+  print ('see word token indexing, and tensor type indexing')
   print (tokens_tensor)
   print (token_type_tensor)
 
@@ -135,12 +138,19 @@ def get_attention_bert(model, tokenizer, sentence_a, sentence_b, include_queries
   output = model(tokens_tensor, token_type_ids=token_type_tensor)
   attn_data_list = output[-1]
 
+  ## how exactly do we want to output the results? user_data + tweet_text --> topic ?? 
+
   # Populate map with attn data and, optionally, query, key data
   keys_dict = defaultdict(list)
   queries_dict = defaultdict(list)
   attn_dict = defaultdict(list)
+
+  ## must fix the slicing here. ?? well, depend how we want to split the sentence
   slice_a = slice(0, len(tokens_a))  # Positions corresponding to sentence A in input
   slice_b = slice(len(tokens_a), len(tokens_a) + len(tokens_b))  # Position corresponding to sentence B in input
+
+  ## want user_data tweet_text (token type=5) then tweet_topic (token type=6) ### need some shifting ???
+
   for layer, attn_data in enumerate(attn_data_list):
     # Process attention
     attn = attn_data['attn'][0]  # assume batch_size=1; shape = [num_heads, source_seq_len, target_seq_len]
