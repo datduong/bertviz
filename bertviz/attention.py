@@ -155,6 +155,8 @@ def get_attention_bert(model, tokenizer, sentence_a, sentence_b, include_queries
     # Process attention
     attn = attn_data['attn'][0]  # assume batch_size=1; shape = [num_heads, source_seq_len, target_seq_len]
     attn_dict['all'].append(attn.tolist())
+    print ('layer {}'.format(layer))
+    print (attn[:, slice_a, slice_a])
     attn_dict['aa'].append(attn[:, slice_a, slice_a].tolist())  # Append A->A attention for layer, across all heads
     attn_dict['bb'].append(attn[:, slice_b, slice_b].tolist())  # Append B->B attention for layer, across all heads
     attn_dict['ab'].append(attn[:, slice_a, slice_b].tolist())  # Append A->B attention for layer, across all heads
